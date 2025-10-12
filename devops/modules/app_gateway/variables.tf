@@ -11,11 +11,20 @@ variable "backend_internal_fqdn" { type = string }
 variable "frontend_port" { type = number }
 variable "backend_port"  { type = number }
 
-variable "log_analytics_workspace_id" {
+variable "enable_diagnostics" {
+  type    = bool
+  default = false
+}
+
+variable "log_analytics_workspace_name" {
   type    = string
   default = null
 }
 
+variable "log_analytics_workspace_rg" {
+  type    = string
+  default = null
+}
 variable "autoscale_min_capacity" {
   type    = number
   default = 1
