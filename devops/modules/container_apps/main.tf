@@ -86,8 +86,8 @@ resource "azurerm_container_app" "backend" {
     }
 
     termination_grace_period_seconds = 60
-    min_replicas = var.backend_min_replicas
-    max_replicas = var.backend_max_replicas
+    min_replicas                     = var.backend_min_replicas
+    max_replicas                     = var.backend_max_replicas
   }
 
   ingress {
@@ -154,7 +154,7 @@ resource "azurerm_container_app" "frontend" {
         name  = "PORT"
         value = tostring(var.frontend_port)
       }
-       env {
+      env {
         name  = "VITE_API_BASE_URL"
         value = "http://${var.appgw_public_ip}"
       }

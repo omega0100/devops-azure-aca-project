@@ -55,7 +55,7 @@ resource "azurerm_network_security_group" "nsg" {
   }
 
   tags = var.tags
-} 
+}
 
 resource "azurerm_subnet_network_security_group_association" "subnet_nsg" {
   for_each = {

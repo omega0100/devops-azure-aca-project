@@ -7,7 +7,7 @@ resource "azurerm_mssql_server" "sql" {
   administrator_login           = var.administrator_login
   administrator_login_password  = var.administrator_password
   public_network_access_enabled = false
-  tags = var.tags
+  tags                          = var.tags
 }
 
 resource "azurerm_mssql_database" "db" {
@@ -43,7 +43,7 @@ resource "azurerm_private_dns_zone" "sql_privatelink" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "vnet_link" {
-  count                 = var.create_private_dns_zone ? 1 : 0
+  count = var.create_private_dns_zone ? 1 : 0
 
   name                  = "${var.server_name}-vnet-link"
   resource_group_name   = var.resource_group_name
@@ -63,11 +63,11 @@ resource "azurerm_private_dns_zone_virtual_network_link" "vnet_link" {
 
 resource "azurerm_private_dns_a_record" "sql" {
   count               = var.create_private_dns_zone ? 1 : 0
-  name                = azurerm_mssql_server.sql.name  # مو FQDN
+  name                = azurerm_mssql_server.sql.name # مو FQDN
   zone_name           = azurerm_private_dns_zone.sql_privatelink[0].name
   resource_group_name = var.resource_group_name
   ttl                 = 300
-  records             = [
+  records = [
     azurerm_private_endpoint.sql_pe.private_service_connection[0].private_ip_address
   ]
 }
