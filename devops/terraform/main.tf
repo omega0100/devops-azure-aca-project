@@ -13,12 +13,12 @@ module "network" {
   location            = var.location
   nsg_name            = "nsg-${terraform.workspace}"
 
-  vnet_name     = var.vnet_name
-  address_space = var.address_space
-  subnets       = var.subnets
-  nsg_rules     = var.nsg_rules
+  vnet_name         = var.vnet_name
+  address_space     = var.address_space
+  subnets           = var.subnets
+  nsg_rules         = var.nsg_rules
   private_endpoints = {}
-  tags = var.tags
+  tags              = var.tags
 }
 
 locals {
@@ -38,9 +38,9 @@ module "sql_database" {
   database_name = "appdb-${terraform.workspace}-Abdullah-Alotaibi"
   tags          = var.tags
 
-  pe_subnet_id             = module.network.subnet_ids["private"]
-  create_private_dns_zone  = true
-  vnet_id                  = module.network.vnet_id
+  pe_subnet_id            = module.network.subnet_ids["private"]
+  create_private_dns_zone = true
+  vnet_id                 = module.network.vnet_id
 }
 
 resource "azurerm_public_ip" "agw_pip" {
@@ -80,13 +80,13 @@ module "container_apps" {
   backend_min_replicas  = var.backend_min_replicas
   backend_max_replicas  = var.backend_max_replicas
 
-    backend_env = {
-    SPRING_DATASOURCE_URL               = "jdbc:sqlserver://${module.sql_database.sql_fqdn}:1433;databaseName=appdb-${terraform.workspace}-Abdullah-Alotaibi;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30"
-    SPRING_DATASOURCE_USERNAME          = var.sql_admin_login
-    SPRING_DATASOURCE_PASSWORD          = var.sql_admin_password
-    SPRING_DATASOURCE_DRIVER_CLASS_NAME = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+  backend_env = {
+    SPRING_DATASOURCE_URL                     = "jdbc:sqlserver://${module.sql_database.sql_fqdn}:1433;databaseName=appdb-${terraform.workspace}-Abdullah-Alotaibi;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30"
+    SPRING_DATASOURCE_USERNAME                = var.sql_admin_login
+    SPRING_DATASOURCE_PASSWORD                = var.sql_admin_password
+    SPRING_DATASOURCE_DRIVER_CLASS_NAME       = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
     MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE = "health,info"
-    SPRING_MVC_CORS_ALLOWED_ORIGINS     = "http://${azurerm_public_ip.agw_pip.ip_address},http://localhost:3000,http://localhost:5173"
+    SPRING_MVC_CORS_ALLOWED_ORIGINS           = "http://${azurerm_public_ip.agw_pip.ip_address},http://localhost:3000,http://localhost:5173"
   }
 
 
@@ -115,5 +115,5 @@ module "app_gateway" {
 
   autoscale_min_capacity = 1
   autoscale_max_capacity = 3
-  tags = var.tags
+  tags                   = var.tags
 }
