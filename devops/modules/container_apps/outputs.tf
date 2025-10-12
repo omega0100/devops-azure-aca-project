@@ -3,7 +3,7 @@ output "environment_id" {
   value       = azurerm_container_app_environment.env.id
 }
 
-# FQDN للفرونت (public ingress)
+
 output "frontend_fqdn_internal" {
   value = azurerm_container_app.frontend.ingress[0].fqdn
 }
