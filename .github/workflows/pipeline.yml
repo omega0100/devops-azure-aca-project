@@ -1,65 +1,69 @@
-name: CI/CD — SonarCloud • Terraform • ACR/ACA
+name: 🚀 CI/CD — Sonar ⟶ ACR ⟶ ACA
 
 on:
-  pull_request:
-    branches: [ main ]
-  push:
-    branches: [ main ]
-    tags:    [ 'v*.*.*' ]
   workflow_dispatch:
     inputs:
+      action:
+        description: Select what to do
+        required: true
+        default: deploy
+        type: choice
+        options: [deploy, destroy]
       target_env:
-        description: 'Environment for Terraform apply (dev/prod)'
+        description: Terraform environment (when destroying with TF)
         required: true
         default: dev
         type: choice
-        options: [ dev, prod ]
-
-# تمنع تداخل تشغيلات لنفس المرجع
-concurrency:
-  group: pipeline-${{ github.ref }}
-  cancel-in-progress: false
+        options: [dev, prod]
 
 permissions:
   contents: read
+  actions: read
   checks: write
+  pull-requests: write
   id-token: write
 
-# متغيرات عامة
-env:
-  ACR_NAME:          acralotaibi826
-  ACR_LOGIN_SERVER:  acralotaibi826.azurecr.io
-  FE_IMAGE_NAME:     frontend
-  BE_IMAGE_NAME:     backend
-  TF_WORKDIR:        devops/terraform
-  TF_VERSION:        1.7.5
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
 
-# ===========================
-# 1) Code Quality – SonarCloud (PR/Push)
-# ===========================
+env:
+  # ---------- ACR ----------
+  ACR_NAME: acralotaibi826
+  ACR_LOGIN_SERVER: acralotaibi826.azurecr.io
+  FE_IMAGE_NAME: frontend
+  BE_IMAGE_NAME: backend
+
+  # ---------- Terraform (لو احتجته في destroy) ----------
+  TF_WORKDIR: devops/terraform
+  TF_VERSION: 1.7.5
+
 jobs:
+  # 1) Sonar — Backend
   backend-analysis:
-    name: Backend Analysis
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: 🔍 Backend Analysis
+    if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up JDK 21
+      - name: ☕ Setup JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
-      - name: Build & Test
+      - name: 🧪 Build & Test
         run: mvn -B -DskipTests=false verify
 
-      - name: SonarCloud Scan (Backend)
+      - name: 🔎 SonarCloud Scan (Backend)
         uses: SonarSource/sonarcloud-github-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,32 +79,35 @@ jobs:
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
             -Dsonar.newCode.referenceBranch=main
 
+  # 2) Sonar — Frontend
   frontend-analysis:
-    name: Frontend Analysis
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: 🔍 Frontend Analysis
+    if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Node.js
+      - name: 🔧 Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install deps
+      - name: 📦 Install deps
         run: npm ci
 
-      - name: Run tests (coverage)
+      - name: 🧪 Test (with coverage)
         run: |
           npm test -- --coverage --watchAll=false || true
 
-      - name: SonarCloud Scan (Frontend)
+      - name: 🔎 SonarCloud Scan (Frontend)
         uses: SonarSource/sonarcloud-github-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,176 +125,135 @@ jobs:
             -Dsonar.typescript.tsconfigPath=tsconfig.json
             -Dsonar.newCode.referenceBranch=main
 
-# ===========================
-# 2) Terraform – على PR فقط: fmt/validate/plan (dev)
-# ===========================
-  tf_plan_dev:
-    name: Terraform CI/CD / fmt/validate/plan (dev) (pull_request)
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    environment: dev
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Azure login (SPN JSON)
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Export ARM_* for Terraform
-        shell: bash
-        run: |
-          echo "ARM_CLIENT_ID=$(jq -r .clientId         <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
-          echo "ARM_CLIENT_SECRET=$(jq -r .clientSecret <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=$(jq -r .tenantId         <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=$(jq -r .subscriptionId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
-          echo "ARM_USE_AZURECLI=false" >> $GITHUB_ENV
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform init
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform init -upgrade -input=false
-
-      - name: Terraform fmt (check)
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform fmt -check -recursive
-
-      - name: Terraform validate
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform validate
-
-      - name: Terraform plan (dev)
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: |
-          terraform plan -input=false -lock-timeout=300s \
-            -var="sql_admin_password=${{ secrets.SQL_ADMIN_PASSWORD_DEV }}" \
-            -var-file="environments/dev/main.tfvars" \
-            -out=tfplan-dev.bin
-
-      - name: Upload plan (artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-dev
-          path: ${{ env.TF_WORKDIR }}/tfplan-dev.bin
-
-# ===========================
-# 3) Build & Push Images إلى ACR (يشتغل على push)
-#    — يتطلب نجاح السونار أولاً
-# ===========================
+  # 3) Build & Push images to ACR
   build_and_push:
-    name: Build & Push images to ACR
-    if: github.event_name == 'push'
+    name: 🔨 Build & Push Images to ACR
+    if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     needs: [backend-analysis, frontend-analysis]
     outputs:
       TAG: ${{ steps.meta.outputs.TAG }}
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-      - name: Azure login (SPN JSON)
+      - name: 🔐 Azure Login (OIDC / SPN JSON)
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Setup Buildx
+      - name: 🏗️ Setup Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: ACR login
+      - name: 🔑 ACR login
         run: az acr login --name $ACR_NAME
 
-      - name: Set TAG (short SHA)
+      - name: 🏷️ Set TAG (short SHA)
         id: meta
         run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: Build & push FRONTEND
+      - name: 🏗️ Build & Push FRONTEND
         run: |
           docker build -t $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }} \
                        -t $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:latest ./frontend
           docker push $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }}
           docker push $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:latest
 
-      - name: Build & push BACKEND
+      - name: 🏗️ Build & Push BACKEND
         run: |
           docker build -t $ACR_LOGIN_SERVER/${BE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }} \
                        -t $ACR_LOGIN_SERVER/${BE_IMAGE_NAME}:latest ./backend
           docker push $ACR_LOGIN_SERVER/${BE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }}
           docker push $ACR_LOGIN_SERVER/${BE_IMAGE_NAME}:latest
 
-# ===========================
-# 4) Deploy إلى Azure Container Apps (push)
-#    — بعد نجاح البناء والدفع
-# ===========================
-  deploy:
-    name: Deploy to Azure Container Apps
-    if: github.event_name == 'push'
+  # 4) Deploy to ACA
+  deploy_aca:
+    name: 🚀 Deploy to Azure Container Apps
+    if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     needs: build_and_push
     steps:
-      - name: Azure login (SPN JSON)
+      - name: 🔐 Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy FRONTEND
+      - name: 🌐 Deploy Frontend (ACA)
         uses: azure/container-apps-deploy-action@v2
         with:
-          resourceGroup:     ${{ secrets.AZ_RESOURCE_GROUP }}
-          containerAppName:  ${{ secrets.ACA_FE_APP }}
-          imageToDeploy:     ${{ env.ACR_LOGIN_SERVER }}/${{ env.FE_IMAGE_NAME }}:${{ needs.build_and_push.outputs.TAG }}
+          resourceGroup:  ${{ secrets.AZ_RESOURCE_GROUP }}
+          containerAppName: ${{ secrets.ACA_FE_APP }}
+          imageToDeploy:  ${{ env.ACR_LOGIN_SERVER }}/${{ env.FE_IMAGE_NAME }}:${{ needs.build_and_push.outputs.TAG }}
 
-      - name: Deploy BACKEND
+      - name: 🧰 Deploy Backend (ACA)
         uses: azure/container-apps-deploy-action@v2
         with:
-          resourceGroup:     ${{ secrets.AZ_RESOURCE_GROUP }}
-          containerAppName:  ${{ secrets.ACA_BE_APP }}
-          imageToDeploy:     ${{ env.ACR_LOGIN_SERVER }}/${{ env.BE_IMAGE_NAME }}:${{ needs.build_and_push.outputs.TAG }}
+          resourceGroup:  ${{ secrets.AZ_RESOURCE_GROUP }}
+          containerAppName: ${{ secrets.ACA_BE_APP }}
+          imageToDeploy:  ${{ env.ACR_LOGIN_SERVER }}/${{ env.BE_IMAGE_NAME }}:${{ needs.build_and_push.outputs.TAG }}
 
-# ===========================
-# 5) Terraform Apply (تشغيل يدوي) dev/prod
-# ===========================
-  tf_apply_manual:
-    name: Terraform apply (${{ inputs.target_env }})
-    if: github.event_name == 'workflow_dispatch'
+  # 5) Smoke Test & Summary
+  verify:
+    name: 🧪 Verify deployment
+    if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target_env }}
+    needs: deploy_aca
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Azure login (SPN JSON)
+      - name: 🔐 Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Select SQL password by env
-        shell: bash
+      - name: 🔎 Get FQDNs & Probe
         run: |
-          if [ "${{ inputs.target_env }}" = "prod" ]; then
-            echo "TF_SQL_PW=${{ secrets.SQL_ADMIN_PASSWORD_PROD }}" >> $GITHUB_ENV
-          else
-            echo "TF_SQL_PW=${{ secrets.SQL_ADMIN_PASSWORD_DEV }}" >> $GITHUB_ENV
-          fi
+          RG=${{ secrets.AZ_RESOURCE_GROUP }}
 
-      - name: Setup Terraform
+          FE=$(az containerapp show --name ${{ secrets.ACA_FE_APP }} --resource-group $RG --query "properties.configuration.ingress.fqdn" -o tsv)
+          BE=$(az containerapp show --name ${{ secrets.ACA_BE_APP }} --resource-group $RG --query "properties.configuration.ingress.fqdn" -o tsv)
+
+          echo "### ✅ Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: https://$FE" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend:  https://$BE" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Health checks" >> $GITHUB_STEP_SUMMARY
+
+          curl -fsS "https://$FE" >/dev/null && echo "- FE Health: ✅" >> $GITHUB_STEP_SUMMARY || echo "- FE Health: ⚠️" >> $GITHUB_STEP_SUMMARY
+          curl -fsS "https://$BE/actuator/health" >/dev/null && echo "- BE Health: ✅" >> $GITHUB_STEP_SUMMARY || echo "- BE Health: ⚠️" >> $GITHUB_STEP_SUMMARY
+
+  # 6) Destroy (infra/apps) — اختياري
+  destroy:
+    name: 💥 Destroy (Terraform or ACA)
+    if: ${{ github.event.inputs.action == 'destroy' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔐 Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # لو عندك كود Terraform وتبغى تستخدمه للتدمير
+      - name: ⚙️ Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Terraform init
+      - name: 📝 Create tfvars
+        working-directory: ${{ env.TF_WORKDIR }}
+        run: |
+          cat > terraform.tfvars << 'EOF'
+          ${{ secrets.TF_VARS }}
+          EOF
+
+      - name: 🧱 Terraform init
         working-directory: ${{ env.TF_WORKDIR }}
         run: terraform init -upgrade -input=false
 
-      - name: Terraform plan (${{ inputs.target_env }})
+      - name: 💣 Terraform destroy (${{ github.event.inputs.target_env }})
         working-directory: ${{ env.TF_WORKDIR }}
         run: |
-          terraform plan -input=false -lock-timeout=300s \
-            -var="sql_admin_password=${TF_SQL_PW}" \
-            -var-file="environments/${{ inputs.target_env }}/main.tfvars" \
-            -out="tfplan-${{ inputs.target_env }}.bin"
-
-      - name: Terraform apply (${{ inputs.target_env }})
-        working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform apply -input=false -auto-approve "tfplan-${{ inputs.target_env }}.bin"
+          terraform destroy -auto-approve \
+            -var-file="environments/${{ github.event.inputs.target_env }}/main.tfvars"
