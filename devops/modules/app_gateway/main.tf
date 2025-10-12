@@ -45,23 +45,23 @@ resource "azurerm_application_gateway" "agw" {
   }
 
   probe {
-    name        = "fe-probe"
-    protocol    = "Https"
-    path        = "/"
-    interval    = 30
-    timeout     = 30
-    unhealthy_threshold = 3
+    name                                      = "fe-probe"
+    protocol                                  = "Https"
+    path                                      = "/"
+    interval                                  = 30
+    timeout                                   = 30
+    unhealthy_threshold                       = 3
     pick_host_name_from_backend_http_settings = true
     match { status_code = ["200-399"] }
   }
 
   probe {
-    name        = "be-probe"
-    protocol    = "Https"
-    path        = "/actuator/health"
-    interval    = 10
-    timeout     = 60
-    unhealthy_threshold = 3
+    name                                      = "be-probe"
+    protocol                                  = "Https"
+    path                                      = "/actuator/health"
+    interval                                  = 10
+    timeout                                   = 60
+    unhealthy_threshold                       = 3
     pick_host_name_from_backend_http_settings = true
     match { status_code = ["200-399"] }
   }
@@ -117,13 +117,13 @@ resource "azurerm_application_gateway" "agw" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "agw_diag" {
-  count                       = var.enable_diagnostics ? 1 : 0
-  name                        = "agw-diag"
-  target_resource_id          = azurerm_application_gateway.agw.id
-  log_analytics_workspace_id  = local.workspace_id
+  count                      = var.enable_diagnostics ? 1 : 0
+  name                       = "agw-diag"
+  target_resource_id         = azurerm_application_gateway.agw.id
+  log_analytics_workspace_id = local.workspace_id
 
-  enabled_log    { category = "ApplicationGatewayAccessLog" }
-  enabled_log    { category = "ApplicationGatewayPerformanceLog" }
-  enabled_log    { category = "ApplicationGatewayFirewallLog" }
+  enabled_log { category = "ApplicationGatewayAccessLog" }
+  enabled_log { category = "ApplicationGatewayPerformanceLog" }
+  enabled_log { category = "ApplicationGatewayFirewallLog" }
   enabled_metric { category = "AllMetrics" }
 }

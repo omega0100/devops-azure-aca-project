@@ -41,21 +41,21 @@ variable "tags" {
 variable "private_endpoints" {
   description = "Private endpoints configuration"
   type = map(object({
-    subnet_name        = string
-    resource_id        = string
-    subresource_names  = list(string)
+    subnet_name       = string
+    resource_id       = string
+    subresource_names = list(string)
   }))
   default = {}
-} 
+}
 
 variable "nsg_rules" {
   description = "Network security group rules"
   type = list(object({
-    name                      = string
-    priority                  = number
-    direction                 = string
-    access                    = string
-    protocol                  = string
+    name                       = string
+    priority                   = number
+    direction                  = string
+    access                     = string
+    protocol                   = string
     source_port_range          = string
     destination_port_range     = string
     source_address_prefix      = string

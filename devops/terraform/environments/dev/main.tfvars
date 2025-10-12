@@ -12,10 +12,10 @@ address_space = ["10.0.0.0/16"]
 
 subnets = {
   frontend = { name = "snet-frontend", address_prefix = ["10.0.1.0/24"] }
-  backend  = { name = "snet-backend",  address_prefix = ["10.0.2.0/24"] }
-  private  = { name = "snet-private",  address_prefix = ["10.0.3.0/24"] }
-  aca      = { name = "snet-aca",      address_prefix = ["10.0.4.0/23"] }
-  agw      = { name = "snet-agw",      address_prefix = ["10.0.6.0/27"] }
+  backend  = { name = "snet-backend", address_prefix = ["10.0.2.0/24"] }
+  private  = { name = "snet-private", address_prefix = ["10.0.3.0/24"] }
+  aca      = { name = "snet-aca", address_prefix = ["10.0.4.0/23"] }
+  agw      = { name = "snet-agw", address_prefix = ["10.0.6.0/27"] }
 }
 
 nsg_rules = [
@@ -33,7 +33,7 @@ nsg_rules = [
 
 private_endpoints = {}
 
-sql_admin_login    = "sqladmin" 
+sql_admin_login = "sqladmin"
 
 frontend_port = 80
 backend_port  = 8080
@@ -48,8 +48,8 @@ frontend_max_replicas = 3
 backend_min_replicas  = 1
 backend_max_replicas  = 3
 
-acr_name           = "acralotaibi826"
-acr_resource_group = "rg-dev-Abdullah-Alotaibi" 
-enable_diagnostics           = false 
+acr_name                     = "acralotaibi826"
+acr_resource_group           = "rg-dev-Abdullah-Alotaibi"
+enable_diagnostics           = false
 log_analytics_workspace_name = "la-workspace-name"
 log_analytics_workspace_rg   = "rg-dev-Abdullah-Alotaibi"
