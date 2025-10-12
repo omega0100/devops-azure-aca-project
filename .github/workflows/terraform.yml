@@ -9,10 +9,10 @@ on:
     inputs:
       target_env:
         description: "Environment to apply (dev/prod)"
-        required: true
-        default: "dev"
         type: choice
-        options: [ "dev", "prod" ]
+        options: [ dev, prod ]
+        required: true
+        default: dev
 
 concurrency:
   group: tf-${{ github.ref }}
@@ -25,15 +25,14 @@ permissions:
 env:
   TF_WORKDIR: devops/terraform
   TF_VERSION: 1.7.5
-  TARGET_ENV: dev
 
 jobs:
   fmt_validate_plan:
     name: fmt/validate/plan (dev)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    env:
-      TARGET_ENV: dev
+    if: github.event_name != 'workflow_dispatch'
+    environment: dev
+
     steps:
       - uses: actions/checkout@v4
 
@@ -42,16 +41,24 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Export ARM_* for Terraform
+        shell: bash
+        run: |
+          echo "ARM_CLIENT_ID=$(jq -r .clientId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_CLIENT_SECRET=$(jq -r .clientSecret <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$(jq -r .tenantId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=$(jq -r .subscriptionId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_USE_AZURECLI=false" >> $GITHUB_ENV
+
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform init
         working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform init -upgrade
+        run: terraform init -upgrade -input=false
 
-      - name: Terraform fmt (check)
+      - name: Terraform fmt
         working-directory: ${{ env.TF_WORKDIR }}
         run: terraform fmt -check -recursive
 
@@ -61,7 +68,12 @@ jobs:
 
       - name: Terraform plan (dev)
         working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform plan -var-file="environments/${{ env.TARGET_ENV }}/main.tfvars" -out=tfplan-dev.bin
+        shell: bash
+        run: |
+          terraform plan -input=false -lock-timeout=300s \
+            -var="sql_admin_password=${{ secrets.SQL_ADMIN_PASSWORD_DEV }}" \
+            -var-file="environments/dev/main.tfvars" \
+            -out=tfplan-dev.bin
 
       - name: Upload plan (artifact)
         uses: actions/upload-artifact@v4
@@ -74,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     environment: ${{ inputs.target_env }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -82,19 +95,41 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Export ARM_* for Terraform
+        shell: bash
+        run: |
+          echo "ARM_CLIENT_ID=$(jq -r .clientId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_CLIENT_SECRET=$(jq -r .clientSecret <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_TENANT_ID=$(jq -r .tenantId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_SUBSCRIPTION_ID=$(jq -r .subscriptionId <<< '${{ secrets.AZURE_CREDENTIALS }}')" >> $GITHUB_ENV
+          echo "ARM_USE_AZURECLI=false" >> $GITHUB_ENV
+
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Select SQL password by env
+        shell: bash
+        run: |
+          if [ "${{ inputs.target_env }}" = "prod" ]; then
+            echo "TF_SQL_PW=${{ secrets.SQL_ADMIN_PASSWORD_PROD }}" >> $GITHUB_ENV
+          else
+            echo "TF_SQL_PW=${{ secrets.SQL_ADMIN_PASSWORD_DEV }}" >> $GITHUB_ENV
+          fi
+
       - name: Terraform init
         working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform init -upgrade
+        run: terraform init -upgrade -input=false
 
       - name: Terraform plan (${{ inputs.target_env }})
         working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform plan -var-file="environments/${{ inputs.target_env }}/main.tfvars" -out="tfplan-${{ inputs.target_env }}.bin"
+        shell: bash
+        run: |
+          terraform plan -input=false -lock-timeout=300s \
+            -var="sql_admin_password=${TF_SQL_PW}" \
+            -var-file="environments/${{ inputs.target_env }}/main.tfvars" \
+            -out="tfplan-${{ inputs.target_env }}.bin"
 
       - name: Terraform apply (${{ inputs.target_env }})
         working-directory: ${{ env.TF_WORKDIR }}
-        run: terraform apply -auto-approve "tfplan-${{ inputs.target_env }}.bin"
+        run: terraform apply -input=false -auto-approve "tfplan-${{ inputs.target_env }}.bin"
