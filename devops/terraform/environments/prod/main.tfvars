@@ -36,8 +36,7 @@ private_endpoints = {}
 sql_admin_login    = "sqladmin"
 sql_admin_password = "CHANGE-ME"
 
-frontend_image = "acralotaibi826.azurecr.io/frontend:v11"
-backend_image  = "acralotaibi826.azurecr.io/backend:v9"
+
 
 frontend_port = 80
 backend_port  = 8080
@@ -54,3 +53,4 @@ backend_max_replicas  = 3
 
 acr_name           = "acralotaibi826"
 acr_resource_group = "rg-prod-Abdullah-Alotaibi"
+
