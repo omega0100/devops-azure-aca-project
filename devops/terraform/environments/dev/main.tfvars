@@ -1,4 +1,3 @@
-# terraform/environments/dev/main.tfvars
 rg_name  = "rg-dev-Abdullah-Alotaibi"
 location = "uksouth"
 
@@ -34,7 +33,7 @@ nsg_rules = [
 
 private_endpoints = {}
 
-sql_admin_login    = "sqladmin"
+sql_admin_login    = "sqladmin" 
 
 frontend_port = 80
 backend_port  = 8080
@@ -50,4 +49,7 @@ backend_min_replicas  = 1
 backend_max_replicas  = 3
 
 acr_name           = "acralotaibi826"
-acr_resource_group = "rg-dev-Abdullah-Alotaibi"
+acr_resource_group = "rg-dev-Abdullah-Alotaibi" 
+enable_diagnostics           = false 
+log_analytics_workspace_name = "la-workspace-name"
+log_analytics_workspace_rg   = "rg-dev-Abdullah-Alotaibi"
