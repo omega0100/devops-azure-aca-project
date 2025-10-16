@@ -1,20 +1,26 @@
-name: 🚀 CI/CD — Sonar ⟶ ACR ⟶ ACA
+name: "🚀 CI/CD — Sonar ⟶ ACR ⟶ ACA"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: Select what to do
+        description: "Select what to do"
         required: true
         default: deploy
         type: choice
         options: [deploy, destroy]
       target_env:
-        description: Terraform environment (when destroying with TF)
+        description: "Terraform environment (when destroying with TF)"
         required: true
         default: dev
         type: choice
         options: [dev, prod]
+      alerts:
+        description: "Send failure alerts (Slack/CallMeBot)"
+        required: true
+        default: on
+        type: choice
+        options: [on, off]
 
 permissions:
   contents: read
@@ -34,36 +40,36 @@ env:
   FE_IMAGE_NAME: frontend
   BE_IMAGE_NAME: backend
 
-  # ---------- Terraform (لو احتجته في destroy) ----------
+  # ---------- Terraform (used only by destroy) ----------
   TF_WORKDIR: devops/terraform
   TF_VERSION: 1.7.5
 
 jobs:
   # 1) Sonar — Backend
   backend-analysis:
-    name: 🔍 Backend Analysis
+    name: "🔍 Backend Analysis"
     if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
     steps:
-      - name: 📥 Checkout
+      - name: "📥 Checkout"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: ☕ Setup JDK 21
+      - name: "☕ Setup JDK 21"
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
-      - name: 🧪 Build & Test
+      - name: "🧪 Build & Test"
         run: mvn -B -DskipTests=false verify
 
-      - name: 🔎 SonarCloud Scan (Backend)
+      - name: "🔎 SonarCloud Scan (Backend)"
         uses: SonarSource/sonarcloud-github-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,39 +87,39 @@ jobs:
 
   # 2) Sonar — Frontend
   frontend-analysis:
-    name: 🔍 Frontend Analysis
+    name: "🔍 Frontend Analysis"
     if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
-      - name: 📥 Checkout
+      - name: "📥 Checkout"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🔧 Setup Node 20
+      - name: "🔧 Setup Node 20"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: 📦 Install deps
+      - name: "📦 Install deps"
         run: npm ci
 
-      - name: 🧪 Test (with coverage)
-        run: |
-          npm test -- --coverage --watchAll=false || true
+      - name: "🧪 Test (with coverage)"
+        run: npm test -- --coverage --watchAll=false || true
 
-      - name: 🔎 SonarCloud Scan (Frontend)
+      - name: "🔎 SonarCloud Scan (Frontend)"
         uses: SonarSource/sonarcloud-github-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: frontend
+        # NOTE: لو عندك أسماء ملفات/مجلدات مختلفة عدّل المسارات تحت
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORG }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_FE }}
@@ -127,39 +133,39 @@ jobs:
 
   # 3) Build & Push images to ACR
   build_and_push:
-    name: 🔨 Build & Push Images to ACR
+    name: "🔨 Build & Push Images to ACR"
     if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     needs: [backend-analysis, frontend-analysis]
     outputs:
       TAG: ${{ steps.meta.outputs.TAG }}
     steps:
-      - name: 📥 Checkout
+      - name: "📥 Checkout"
         uses: actions/checkout@v4
 
-      - name: 🔐 Azure Login (OIDC / SPN JSON)
+      - name: "🔐 Azure Login (OIDC/SPN JSON)"
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🏗️ Setup Buildx
+      - name: "🏗️ Setup Buildx"
         uses: docker/setup-buildx-action@v3
 
-      - name: 🔑 ACR login
+      - name: "🔑 ACR login"
         run: az acr login --name $ACR_NAME
 
-      - name: 🏷️ Set TAG (short SHA)
+      - name: "🏷️ Set TAG (short SHA)"
         id: meta
         run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: 🏗️ Build & Push FRONTEND
+      - name: "🏗️ Build & Push FRONTEND"
         run: |
           docker build -t $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }} \
                        -t $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:latest ./frontend
           docker push $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }}
           docker push $ACR_LOGIN_SERVER/${FE_IMAGE_NAME}:latest
 
-      - name: 🏗️ Build & Push BACKEND
+      - name: "🏗️ Build & Push BACKEND"
         run: |
           docker build -t $ACR_LOGIN_SERVER/${BE_IMAGE_NAME}:${{ steps.meta.outputs.TAG }} \
                        -t $ACR_LOGIN_SERVER/${BE_IMAGE_NAME}:latest ./backend
@@ -168,24 +174,24 @@ jobs:
 
   # 4) Deploy to ACA
   deploy_aca:
-    name: 🚀 Deploy to Azure Container Apps
+    name: "🚀 Deploy to Azure Container Apps"
     if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     needs: build_and_push
     steps:
-      - name: 🔐 Azure Login
+      - name: "🔐 Azure Login"
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🌐 Deploy Frontend (ACA)
+      - name: "🌐 Deploy Frontend (ACA)"
         uses: azure/container-apps-deploy-action@v2
         with:
           resourceGroup:  ${{ secrets.AZ_RESOURCE_GROUP }}
           containerAppName: ${{ secrets.ACA_FE_APP }}
           imageToDeploy:  ${{ env.ACR_LOGIN_SERVER }}/${{ env.FE_IMAGE_NAME }}:${{ needs.build_and_push.outputs.TAG }}
 
-      - name: 🧰 Deploy Backend (ACA)
+      - name: "🧰 Deploy Backend (ACA)"
         uses: azure/container-apps-deploy-action@v2
         with:
           resourceGroup:  ${{ secrets.AZ_RESOURCE_GROUP }}
@@ -194,20 +200,19 @@ jobs:
 
   # 5) Smoke Test & Summary
   verify:
-    name: 🧪 Verify deployment
+    name: "🧪 Verify deployment"
     if: ${{ github.event.inputs.action != 'destroy' }}
     runs-on: ubuntu-latest
     needs: deploy_aca
     steps:
-      - name: 🔐 Azure Login
+      - name: "🔐 Azure Login"
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🔎 Get FQDNs & Probe
+      - name: "🔎 Get FQDNs & Probe"
         run: |
           RG=${{ secrets.AZ_RESOURCE_GROUP }}
-
           FE=$(az containerapp show --name ${{ secrets.ACA_FE_APP }} --resource-group $RG --query "properties.configuration.ingress.fqdn" -o tsv)
           BE=$(az containerapp show --name ${{ secrets.ACA_BE_APP }} --resource-group $RG --query "properties.configuration.ingress.fqdn" -o tsv)
 
@@ -221,39 +226,97 @@ jobs:
           curl -fsS "https://$FE" >/dev/null && echo "- FE Health: ✅" >> $GITHUB_STEP_SUMMARY || echo "- FE Health: ⚠️" >> $GITHUB_STEP_SUMMARY
           curl -fsS "https://$BE/actuator/health" >/dev/null && echo "- BE Health: ✅" >> $GITHUB_STEP_SUMMARY || echo "- BE Health: ⚠️" >> $GITHUB_STEP_SUMMARY
 
-  # 6) Destroy (infra/apps) — اختياري
+  # 6) Destroy (infra/apps) — optional
   destroy:
-    name: 💥 Destroy (Terraform or ACA)
+    name: "💥 Destroy (Terraform or ACA)"
     if: ${{ github.event.inputs.action == 'destroy' }}
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: "📥 Checkout"
         uses: actions/checkout@v4
 
-      - name: 🔐 Azure Login
+      - name: "🔐 Azure Login"
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # لو عندك كود Terraform وتبغى تستخدمه للتدمير
-      - name: ⚙️ Setup Terraform
+      - name: "⚙️ Setup Terraform"
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: 📝 Create tfvars
+      - name: "📝 Create tfvars"
         working-directory: ${{ env.TF_WORKDIR }}
         run: |
           cat > terraform.tfvars << 'EOF'
           ${{ secrets.TF_VARS }}
           EOF
 
-      - name: 🧱 Terraform init
+      - name: "🧱 Terraform init"
         working-directory: ${{ env.TF_WORKDIR }}
         run: terraform init -upgrade -input=false
 
-      - name: 💣 Terraform destroy (${{ github.event.inputs.target_env }})
+      - name: "💣 Terraform destroy (${{ github.event.inputs.target_env }})"
         working-directory: ${{ env.TF_WORKDIR }}
         run: |
           terraform destroy -auto-approve \
             -var-file="environments/${{ github.event.inputs.target_env }}/main.tfvars"
+
+  # 7) Alerts — runs ALWAYS, sends only if:
+  #    - workflow had any failure  AND
+  #    - alerts == on
+  notify_failure:
+    name: "📣 Failure Alerts (Slack + CallMeBot)"
+    runs-on: ubuntu-latest
+    needs: 
+      - backend-analysis
+      - frontend-analysis
+      - build_and_push
+      - deploy_aca
+      - verify
+      - destroy
+    if: ${{ always() }}
+    steps:
+      - name: "Only send if failed AND alerts=on"
+        if: ${{ failure() && inputs.alerts == 'on' }}
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          CMB_PHONE: ${{ secrets.CMB_PHONE }}
+          CMB_APIKEY: ${{ secrets.CMB_APIKEY }}
+        shell: bash
+        run: |
+          REPO="${GITHUB_REPOSITORY}"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          ACTOR="${GITHUB_ACTOR}"
+          REF="${GITHUB_REF_NAME}"
+          WF="${GITHUB_WORKFLOW}"
+          EVT="${GITHUB_EVENT_NAME}"
+          MSG="[GITHUB ACTIONS] Pipeline failed
+          Repository: ${REPO}
+          Workflow: ${WF}
+          Branch: ${REF}
+          Event: ${EVT}
+          Triggered by: ${ACTOR}
+          Run URL: ${RUN_URL}"
+
+          # Slack
+          if [ -n "${SLACK_WEBHOOK}" ]; then
+            printf '%s' "$MSG" | jq -Rs '{text:.}' \
+            | curl -fsSL -X POST -H 'Content-type: application/json' --data @- "$SLACK_WEBHOOK" || true
+          fi
+
+          # CallMeBot (encode safely with Python)
+          python3 - <<'PY' || true
+          import os, urllib.parse, sys, urllib.request
+          phone = os.environ.get("CMB_PHONE")
+          key   = os.environ.get("CMB_APIKEY")
+          msg   = os.environ.get("MSG", "")
+          if phone and key:
+              q   = urllib.parse.quote(msg)
+              url = f"https://api.callmebot.com/call.php?phone={urllib.parse.quote(phone)}&text={q}&lang=en-US&apikey={urllib.parse.quote(key)}"
+              try:
+                  urllib.request.urlopen(url, timeout=20).read()
+              except Exception as e:
+                  print(e, file=sys.stderr)
+          PY
+
