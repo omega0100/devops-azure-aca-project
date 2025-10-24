@@ -57,4 +57,6 @@ variable "backend_min_replicas"  { type = number }
 variable "backend_max_replicas"  { type = number }
 
 variable "acr_name"           { type = string }
-variable "acr_resource_group" { type = string }
+variable "acr_resource_group" { type = string } 
+
+
