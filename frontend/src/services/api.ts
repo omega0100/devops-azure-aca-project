@@ -86,7 +86,7 @@ export const removeCartItem = async (itemId: number): Promise<void> => {
   await apiClient.delete(`cart/items/${itemId}`);
 };
 
-/* =========================== Orders =========================== */
+/* =========================== Orders ============================ */
 
 export const createOrder = async (orderData: {
   sessionId: string;
